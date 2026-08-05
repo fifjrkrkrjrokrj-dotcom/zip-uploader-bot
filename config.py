@@ -64,7 +64,7 @@ LOG_CHANNEL_ID = os.environ.get("LOG_CHANNEL_ID", "")
 # MTProto directly use karta hai, isliye ye limit apply nahi hoti (bot
 # accounts 2GB tak files bhej/receive kar sakte hain, koi local server
 # host karne ki zaroorat nahi).
-MAX_FILE_SIZE_MB = int(os.environ.get("MAX_FILE_SIZE_MB", "50"))
+MAX_FILE_SIZE_MB = int(os.environ.get("MAX_FILE_SIZE_MB", "2000"))
 
 # Ek zip me max kitni files bot bhejega (spam-protection)
 MAX_FILES_TO_SEND = int(os.environ.get("MAX_FILES_TO_SEND", "100"))
@@ -174,7 +174,7 @@ def _tier(mb, rate_s, queue):
 
 TIER_LIMITS = {
     "free": _tier(
-        int(os.environ.get("MAX_FILE_SIZE_MB", "1000")),
+        int(os.environ.get("MAX_FILE_SIZE_MB", "2000")),
         int(os.environ.get("RATE_LIMIT_SECONDS", "10")),
         int(os.environ.get("MAX_QUEUE_PER_USER", "5")),
     ),
