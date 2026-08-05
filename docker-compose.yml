@@ -4,7 +4,24 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
     volumes:
       - ./downloads:/app/downloads
       - ./extracted:/app/extracted
       - ./rezipped:/app/rezipped
+      - ./backups:/app/backups
+      - ./cache:/app/cache
+    ports:
+      - "8080:8080"   # sirf DASHBOARD_ENABLED=true hone par zaroori hai
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
