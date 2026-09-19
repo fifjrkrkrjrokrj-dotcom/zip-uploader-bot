@@ -912,13 +912,21 @@ async def job_callback(client, callback_query: CallbackQuery):
     target_channel = await db.get_target_channel(user_id)
     send_chat_id = target_channel if (target_channel and chat_id == user_id) else chat_id
     
+    video_exts = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv"}
     for file_path in files_to_send:
         try:
-            await client.send_chat_action(chat_id=send_chat_id, action=ChatAction.UPLOAD_DOCUMENT)
-            sent_msg = await client.send_document(
-                chat_id=send_chat_id, document=str(file_path), file_name=file_path.name,
-                caption=str(file_path.relative_to(extract_dir)),
-            )
+            if file_path.suffix.lower() in video_exts:
+                await client.send_chat_action(chat_id=send_chat_id, action=ChatAction.UPLOAD_VIDEO)
+                sent_msg = await client.send_video(
+                    chat_id=send_chat_id, video=str(file_path), file_name=file_path.name,
+                    caption=str(file_path.relative_to(extract_dir)),
+                )
+            else:
+                await client.send_chat_action(chat_id=send_chat_id, action=ChatAction.UPLOAD_DOCUMENT)
+                sent_msg = await client.send_document(
+                    chat_id=send_chat_id, document=str(file_path), file_name=file_path.name,
+                    caption=str(file_path.relative_to(extract_dir)),
+                )
             await db.add_sent_message(send_chat_id, sent_msg.id, kind="document")
             sent_count += 1
         except Exception as e:
