@@ -38,7 +38,7 @@ from pyrogram.types import (
     InlineKeyboardMarkup,
     ForceReply,
 )
-from pyrogram.enums import ChatAction, ParseMode, ChatMemberStatus
+from pyrogram.enums import ChatAction, ParseMode, ChatMemberStatus, ChatType
 from pyrogram.errors import RPCError, UserNotParticipant
 
 import config
@@ -700,6 +700,31 @@ async def handle_unsupported_message(client, message: Message):
     await message.reply_text(i18n.t("unsupported_message", lang))
 
 
+async def handle_forwarded_message(client, message: Message):
+    chat_id = message.chat.id
+    user = message.from_user
+    lang = await db.get_user_lang(user.id)
+
+    if message.forward_from_chat and message.forward_from_chat.type == ChatType.CHANNEL:
+        channel_id = message.forward_from_chat.id
+        channel_title = message.forward_from_chat.title
+        try:
+            member = await client.get_chat_member(channel_id, (await client.get_me()).id)
+            if member.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
+                await db.set_target_channel(user.id, channel_id)
+                await message.reply_text(f"✅ Successfully connected to channel: **{channel_title}**.\nAll extracted files will now be sent there.")
+            else:
+                await message.reply_text("❌ I am not an admin in that channel. Please make me an admin with post rights and try again.")
+        except Exception as e:
+            await message.reply_text(f"❌ Failed to verify admin rights. Make sure I am an admin in the channel. Error: {e}")
+        return
+
+    if message.text or message.photo or message.video:
+        await handle_text(client, message)
+    else:
+        await handle_unsupported_message(client, message)
+
+
 # ============================================================
 #  PREVIEW → EXTRACT → SEND FILES / SEND ZIP / CANCEL
 # ============================================================
@@ -824,11 +849,19 @@ async def job_callback(client, callback_query: CallbackQuery):
         zip_path = Path(config.REZIP_DIR) / str(chat_id) / f"{job_id}.zip"
         try:
             security.rezip_files(files_to_send, extract_dir, zip_path)
-            await client.send_chat_action(chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT)
+            
+            target_channel = await db.get_target_channel(user_id)
+            send_chat_id = target_channel if target_channel else chat_id
+            
+            await client.send_chat_action(chat_id=send_chat_id, action=ChatAction.UPLOAD_DOCUMENT)
             sent_msg = await client.send_document(
-                chat_id=chat_id, document=str(zip_path), file_name=f"extracted_{job_id}.zip"
+                chat_id=send_chat_id, document=str(zip_path), file_name=f"extracted_{job_id}.zip"
             )
-            await db.add_sent_message(chat_id, sent_msg.id, kind="zip")
+            await db.add_sent_message(send_chat_id, sent_msg.id, kind="zip")
+            
+            if target_channel:
+                await client.send_message(chat_id=chat_id, text=f"✅ Sent zip to connected channel.")
+                
             await db.increment_extractions(files_sent=len(files_to_send))
             await db.add_history(user_id, file_name, len(files_to_send), total_size, "zip")
 
@@ -848,14 +881,18 @@ async def job_callback(client, callback_query: CallbackQuery):
     # action == "send" -> individual files
     sent_count = 0
     last_edit = 0.0
+    
+    target_channel = await db.get_target_channel(user_id)
+    send_chat_id = target_channel if target_channel else chat_id
+    
     for file_path in files_to_send:
         try:
-            await client.send_chat_action(chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT)
+            await client.send_chat_action(chat_id=send_chat_id, action=ChatAction.UPLOAD_DOCUMENT)
             sent_msg = await client.send_document(
-                chat_id=chat_id, document=str(file_path), file_name=file_path.name,
+                chat_id=send_chat_id, document=str(file_path), file_name=file_path.name,
                 caption=str(file_path.relative_to(extract_dir)),
             )
-            await db.add_sent_message(chat_id, sent_msg.id, kind="document")
+            await db.add_sent_message(send_chat_id, sent_msg.id, kind="document")
             sent_count += 1
         except Exception as e:
             logger.error(f"Failed to send {file_path}: {e}")
@@ -912,6 +949,7 @@ def _register_handlers(client: Client):
     client.add_handler(MessageHandler(admin.logs_command, filters.command("logs")))
     client.add_handler(CallbackQueryHandler(button_callback))
     client.add_handler(MessageHandler(handle_document, filters.document))
+    client.add_handler(MessageHandler(handle_forwarded_message, filters.forwarded))
     client.add_handler(
         MessageHandler(handle_text, (filters.text & NOT_COMMAND) | filters.photo | filters.video)
     )

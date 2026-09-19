@@ -118,6 +118,19 @@ async def get_banned_count() -> int:
     return await users_col.count_documents({"banned": True})
 
 
+# ---------------- TARGET CHANNEL ----------------
+async def get_target_channel(user_id: int) -> int | None:
+    doc = await users_col.find_one({"user_id": user_id}, {"target_channel": 1})
+    return (doc or {}).get("target_channel")
+
+
+async def set_target_channel(user_id: int, channel_id: int | None):
+    if channel_id is None:
+        await users_col.update_one({"user_id": user_id}, {"$unset": {"target_channel": ""}})
+    else:
+        await users_col.update_one({"user_id": user_id}, {"$set": {"target_channel": channel_id}}, upsert=True)
+
+
 # ---------------- LANGUAGE ----------------
 async def get_user_lang(user_id: int) -> str:
     doc = await users_col.find_one({"user_id": user_id}, {"lang": 1})
