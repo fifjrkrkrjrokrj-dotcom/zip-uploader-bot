@@ -138,6 +138,9 @@ def preview_keyboard(job_id: str, lang: str) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(sc(i18n.tb("send_files", lang)), callback_data=f"job_send_{job_id}"),
                 InlineKeyboardButton(sc(i18n.tb("send_zip", lang)), callback_data=f"job_zip_{job_id}"),
             ],
+            [
+                InlineKeyboardButton(sc(i18n.tb("send_videos", lang)), callback_data=f"job_video_{job_id}"),
+            ],
             [InlineKeyboardButton(sc(i18n.tb("cancel", lang)), callback_data=f"job_cancel_{job_id}")],
         ]
     )
@@ -866,7 +869,7 @@ async def job_callback(client, callback_query: CallbackQuery):
             security.rezip_files(files_to_send, extract_dir, zip_path)
             
             target_channel = await db.get_target_channel(user_id)
-            send_chat_id = target_channel if target_channel else chat_id
+            send_chat_id = target_channel if (target_channel and chat_id == user_id) else chat_id
             
             await client.send_chat_action(chat_id=send_chat_id, action=ChatAction.UPLOAD_DOCUMENT)
             sent_msg = await client.send_document(
@@ -874,7 +877,7 @@ async def job_callback(client, callback_query: CallbackQuery):
             )
             await db.add_sent_message(send_chat_id, sent_msg.id, kind="zip")
             
-            if target_channel:
+            if send_chat_id != chat_id:
                 await client.send_message(chat_id=chat_id, text=f"✅ Sent zip to connected channel.")
                 
             await db.increment_extractions(files_sent=len(files_to_send))
@@ -893,12 +896,21 @@ async def job_callback(client, callback_query: CallbackQuery):
                 security.cleanup(extract_dir)
         return
 
-    # action == "send" -> individual files
+    if action == "video":
+        video_exts = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv"}
+        files_to_send = [f for f in files_to_send if f.suffix.lower() in video_exts]
+        if not files_to_send:
+            await callback_query.edit_message_text(i18n.t("no_videos_found", lang))
+            if not (from_cache or config.CACHE_ENABLED):
+                security.cleanup(extract_dir)
+            return
+
+    # action == "send" or action == "video" -> individual files
     sent_count = 0
     last_edit = 0.0
     
     target_channel = await db.get_target_channel(user_id)
-    send_chat_id = target_channel if target_channel else chat_id
+    send_chat_id = target_channel if (target_channel and chat_id == user_id) else chat_id
     
     for file_path in files_to_send:
         try:

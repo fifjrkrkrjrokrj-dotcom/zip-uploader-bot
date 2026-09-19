@@ -185,6 +185,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "hi": "✅ verified! ab apni archive file bhejo.",
         "en": "✅ Verified! Now send your archive file.",
     },
+    "no_videos_found": {
+        "hi": "📭 archive me koi video nahi mili.",
+        "en": "📭 No videos found in the archive.",
+    },
 }
 
 
@@ -201,6 +205,7 @@ BUTTONS: dict[str, dict[str, str]] = {
     "joined": {"hi": "✅ i've joined", "en": "✅ i've joined"},
     "send_files": {"hi": "✅ send files", "en": "✅ send files"},
     "send_zip": {"hi": "🗜 send as zip", "en": "🗜 send as zip"},
+    "send_videos": {"hi": "🎬 send only videos", "en": "🎬 send only videos"},
     "cancel": {"hi": "❌ cancel", "en": "❌ cancel"},
 }
 
