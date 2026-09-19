@@ -519,8 +519,23 @@ async def process_archive_job(job: dict, client):
         parse_mode=ParseMode.HTML,
     )
 
+    last_edit = [time.time()]
+
+    async def download_progress(current, total):
+        now = time.time()
+        if now - last_edit[0] > 2.0 or current == total:
+            pct = (current / total) * 100 if total else 0
+            try:
+                await status.edit_text(
+                    i18n.t("downloading", lang, name=file_name, size=human_size(file_size), bar=progress_bar(pct)),
+                    parse_mode=ParseMode.HTML,
+                )
+                last_edit[0] = now
+            except Exception:
+                pass
+
     try:
-        await message.download(file_name=str(archive_path))
+        await message.download(file_name=str(archive_path), progress=download_progress)
     except Exception as e:
         logger.exception("Download failed")
         await status.edit_text(i18n.t("download_failed", lang, err=e))
